@@ -48,13 +48,11 @@ function recordsHref(days: PeriodDays): string {
 export default function App() {
   const [days, setDays] = useState<PeriodDays>(initialPeriod);
   const [attempts, setAttempts] = useState(ATTEMPTS);
-  const [openId, setOpenId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
 
   const visible = attempts.filter((attempt) => inPeriod(attempt.atUtc, days));
   const declared = visible.filter((attempt) => attempt.ok);
   const failures = visible.filter((attempt) => !attempt.ok).sort((a, b) => b.atUtc - a.atUtc);
-  const open = attempts.find((attempt) => attempt.id === openId) ?? null;
   const buckets = trendBuckets(declared, days);
 
   const choosePeriod = (next: number) => {
@@ -142,7 +140,7 @@ export default function App() {
                     <th scope="col">Actor</th>
                     <th scope="col">Failure</th>
                     <th scope="col">
-                      <span className="sr-only">Review</span>
+                      <span className="sr-only">Retry</span>
                     </th>
                   </tr>
                 </thead>
@@ -156,17 +154,11 @@ export default function App() {
                       <td>{attempt.actor}</td>
                       <td>{attempt.error}</td>
                       <td>
-                        <button
-                          type="button"
-                          data-target-id={`Observability-review-${attempt.id}`}
-                          aria-expanded={openId === attempt.id}
-                          onClick={() => {
-                            setOpenId(attempt.id);
-                            setNotice('');
-                          }}
-                        >
-                          Review
-                        </button>
+                        {attempt.channel === 'workflow' && attempt.retryable ? (
+                          <button type="button" data-target-id={`Observability-retry-${attempt.id}`} onClick={() => retry(attempt)}>
+                            Retry
+                          </button>
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -175,7 +167,6 @@ export default function App() {
             </div>
           ) : null}
         </section>
-        {open && !open.ok ? <FailurePanel attempt={open} onClose={() => setOpenId(null)} onRetry={() => retry(open)} /> : null}
       </div>
     </div>
   );
@@ -267,63 +258,6 @@ function LineChart({ buckets }: { buckets: Bucket[] }) {
         )}
       </svg>
     </div>
-  );
-}
-
-function FailurePanel({
-  attempt,
-  onClose,
-  onRetry,
-}: {
-  attempt: DeclarationAttempt;
-  onClose: () => void;
-  onRetry: () => void;
-}) {
-  return (
-    <aside className="detail-panel" aria-label="Declaration failure">
-      <div className="detail-heading">
-        <h2>Declaration failed</h2>
-        <button type="button" className="linkish" data-target-id="FailurePanel-close" onClick={onClose}>
-          Close
-        </button>
-      </div>
-      <article className="panel detail-card">
-        <h3>{attempt.recordName}</h3>
-        <dl>
-          <div>
-            <dt>Record type</dt>
-            <dd>{attempt.recordType}</dd>
-          </div>
-          <div>
-            <dt>Record group</dt>
-            <dd>{attempt.recordGroup}</dd>
-          </div>
-          <div>
-            <dt>Path</dt>
-            <dd>{channelById(attempt.channel).label}</dd>
-          </div>
-          <div>
-            <dt>Actor</dt>
-            <dd>{attempt.actor}</dd>
-          </div>
-          <div>
-            <dt>Attempted</dt>
-            <dd>{formatWhen(attempt.atUtc)}</dd>
-          </div>
-          <div>
-            <dt>Failure</dt>
-            <dd>{attempt.error}</dd>
-          </div>
-        </dl>
-        {attempt.retryable ? (
-          <button type="button" className="primary" data-target-id={`FailurePanel-retry-${attempt.id}`} onClick={onRetry}>
-            Retry declaration
-          </button>
-        ) : (
-          <p className="meta">Retry will not succeed until this cause is fixed.</p>
-        )}
-      </article>
-    </aside>
   );
 }
 
